@@ -1,0 +1,112 @@
+{
+  "name": "Lead Generation - Test",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-capture",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "f0c6de95-41da-42b9-b28a-3925237fd2d6",
+      "name": "Webhook",
+      "webhookId": "15b9b9de-b043-4e70-91fb-713fc412e95f"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "0acf10ff-c842-4f1a-af17-b3f8de665abe",
+              "name": "name",
+              "value": "={{ $json.body.name }}",
+              "type": "string"
+            },
+            {
+              "id": "73f03d91-40f2-4781-a16f-911305b6bc3f",
+              "name": "email",
+              "value": "={{ $json.body.email }}",
+              "type": "string"
+            },
+            {
+              "id": "461be3b0-f06b-498d-9750-1e29b1ec4fc8",
+              "name": "company",
+              "value": "={{ $json.body.company }}",
+              "type": "string"
+            },
+            {
+              "id": "03c0ae07-cc13-43b8-a059-7382d2f7cf92",
+              "name": "timestamp",
+              "value": "={{ $now.toISO() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        208,
+        0
+      ],
+      "id": "6dba04d0-2292-4446-a188-85bc1ca65830",
+      "name": "Edit Fields"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Simular envío de email de bienvenida\nconst inputData = $input.all();\nconst data = inputData[0].json;\n\nreturn inputData.map(item => ({\n  json: {\n    sent: true,\n    recipient: data.email,\n    subject: `¡Gracias por tu interés, ${data.name}!`,\n    message: `Hola ${data.name} de ${data.company},\\n\\nGracias por contactarnos desde AutomationHub.\\n\\nNos pondremos en contacto contigo en las próximas 24 horas.\\n\\nSaludos,\\nEquipo AutomationHub`,\n    sent_at: new Date().toISOString(),\n    lead_data: {\n      name: data.name,\n      email: data.email,\n      company: data.company,\n      captured_at: data.timestamp\n    }\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        0
+      ],
+      "id": "cf4eb7bd-c326-4066-88d9-c1ca52af4d89",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "55faca39-eedc-40ec-92bb-cef8da7eeb4e",
+  "meta": {
+    "instanceId": "f40c495cd2b3cc464a9f3dd3063bb0cc649dfb62f6dc399f43bda49a94167bde"
+  },
+  "id": "DxuRYfQCNynhYyxR",
+  "tags": []
+}

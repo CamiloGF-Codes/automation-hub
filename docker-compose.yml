@@ -1,0 +1,66 @@
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: automation-hub-db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: camigonfu15
+      POSTGRES_DB: automation_hub
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: automation-hub-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: automation-hub-n8n
+    environment:
+      - N8N_OWNER_EMAIL=camilogonzalezfuentes1303@gmail.com
+      - N8N_OWNER_FIRST_NAME=Camilo
+      - N8N_OWNER_LAST_NAME=Gonzalez
+      - N8N_OWNER_PASSWORD=Alpacaalex1-
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=admin
+      - N8N_BASIC_AUTH_PASSWORD=camigonfu15
+      - N8N_HOST=localhost
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - GENERIC_TIMEZONE=America/Costa_Rica
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:
+  n8n_data:
+
+networks:
+  default:
+    name: automation-hub-network
