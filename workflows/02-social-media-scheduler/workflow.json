@@ -1,0 +1,267 @@
+{
+  "name": "Social Media Scheduler",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 9 * * *"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [0, 0],
+      "id": "trigger-scheduler",
+      "name": "Daily Trigger 9AM"
+    },
+    {
+      "parameters": {
+        "operation": "read",
+        "documentId": "={{ $env.GOOGLE_SHEETS_ID }}",
+        "sheetName": "Posts",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [220, 0],
+      "id": "read-sheets",
+      "name": "Read Scheduled Posts",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "filter-date",
+              "leftValue": "={{ $json.scheduled_date }}",
+              "rightValue": "={{ $now.format('yyyy-MM-dd') }}",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "filter-status",
+              "leftValue": "={{ $json.status }}",
+              "rightValue": "pending",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2,
+      "position": [440, 0],
+      "id": "filter-posts",
+      "name": "Filter Today's Posts"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Prepare post data for Buffer API\nconst post = $input.item.json;\n\nconst platformMap = {\n  'twitter': 'twitter',\n  'linkedin': 'linkedin',\n  'instagram': 'instagram',\n  'facebook': 'facebook'\n};\n\nreturn {\n  json: {\n    text: post.content,\n    profile_ids: [$env[`BUFFER_${platformMap[post.platform]?.toUpperCase()}_ID`]],\n    scheduled_at: null,\n    media: post.media_url ? { link: post.media_url } : null,\n    metadata: {\n      post_id: post.id,\n      platform: post.platform,\n      scheduled_date: post.scheduled_date\n    }\n  }\n};"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [660, 0],
+      "id": "prepare-buffer",
+      "name": "Prepare Buffer Payload"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.bufferapp.com/1/updates/create.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [880, 0],
+      "id": "buffer-api",
+      "name": "Publish to Buffer",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "buffer-api-token",
+          "name": "Buffer API Token"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEETS_ID }}",
+        "sheetName": "Posts",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "published",
+            "published_at": "={{ $now.toISO() }}"
+          }
+        },
+        "options": {
+          "dataLocation": "={{ $json.metadata.row_number }}"
+        }
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1100, -80],
+      "id": "update-success",
+      "name": "Mark as Published",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": "={{ $env.GOOGLE_SHEETS_ID }}",
+        "sheetName": "Posts",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "status": "failed",
+            "error_message": "={{ $json.error?.message || 'Unknown error' }}"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1100, 100],
+      "id": "update-failed",
+      "name": "Mark as Failed",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google-sheets-credentials",
+          "name": "Google Sheets API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log publication result\nconst results = $input.all();\n\nreturn results.map(item => ({\n  json: {\n    timestamp: new Date().toISOString(),\n    post_id: item.json.metadata?.post_id || 'unknown',\n    platform: item.json.metadata?.platform || 'unknown',\n    status: item.json.success ? 'published' : 'failed',\n    buffer_response: item.json\n  }\n}));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1320, -80],
+      "id": "log-result",
+      "name": "Log Results"
+    }
+  ],
+  "connections": {
+    "Daily Trigger 9AM": {
+      "main": [
+        [
+          {
+            "node": "Read Scheduled Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read Scheduled Posts": {
+      "main": [
+        [
+          {
+            "node": "Filter Today's Posts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Today's Posts": {
+      "main": [
+        [
+          {
+            "node": "Prepare Buffer Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Buffer Payload": {
+      "main": [
+        [
+          {
+            "node": "Publish to Buffer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish to Buffer": {
+      "main": [
+        [
+          {
+            "node": "Mark as Published",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark as Published": {
+      "main": [
+        [
+          {
+            "node": "Log Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2-social-media-scheduler-v1",
+  "meta": {
+    "templateName": "Social Media Scheduler",
+    "templateDescription": "Automated daily social media posting from Google Sheets to Buffer",
+    "author": "AutomationHub"
+  },
+  "tags": [
+    {
+      "name": "social-media",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    },
+    {
+      "name": "automation",
+      "createdAt": "2024-01-01T00:00:00.000Z",
+      "updatedAt": "2024-01-01T00:00:00.000Z"
+    }
+  ]
+}
